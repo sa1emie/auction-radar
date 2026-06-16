@@ -1,0 +1,26 @@
+# Tesla Model 3 watcher — accepts unknown odometer (Tesla's reporting is inconsistent),
+# blocks fire damage (battery fires are total losses).
+
+[location]
+zip = "00000"
+origin = [0.0000, 0.0000]
+max_miles = 200
+home_label = "home"
+
+[vehicle]
+make = "Tesla"
+models = ["Model 3"]
+model_numbers = ["Standard Range", "Long Range", "Performance"]
+exclude_patterns = []
+
+[filters]
+year_min = 2018
+max_odometer = 100000
+allow_unknown_odometer = true
+title_required_clean = true
+# Battery fire = total loss. Be stricter than the default damage blocklist.
+damage_block = [
+    "AIRBAG", "FLOOD", "WATER", "FIRE", "BURN", "ROLLOVER",
+    "FRAME", "MECHANICAL", "ENGINE", "STRIPPED", "VANDALISM",
+    "ELECTRICAL", "BATTERY",
+]

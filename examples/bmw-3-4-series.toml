@@ -1,0 +1,29 @@
+# BMW 3-Series + 4-Series watcher — original config that shipped with this repo.
+# Excludes hybrids and EVs (xxxe / i-series) because drivetrain priorities differ.
+
+[location]
+zip = "76010"          # your home ZIP (informational; not used in queries)
+origin = [32.7357, -97.1081]  # your lat, lon — used for distance calcs + Copart radius
+max_miles = 250
+home_label = "ARL"     # short tag shown in distance output, e.g. "28mi from ARL"
+
+[vehicle]
+make = "BMW"
+models = ["3 Series", "4 Series", "M3", "M4"]
+model_numbers = ["320", "328", "330", "335", "340", "420", "428", "430", "435", "440"]
+# Exclude regex patterns matched against model text. Strips BMW i-series + xxxe hybrids.
+exclude_patterns = [
+    "\\bHYBRID\\b",
+    "\\bELECTRIC\\b",
+    "\\b330E\\b",
+    "\\b430E\\b",
+    "\\bI[348X]\\b",
+]
+
+[filters]
+year_min = 2018
+max_odometer = 90000
+allow_unknown_odometer = true   # accepts Copart NOT ACTUAL / EXEMPT brands for manual review
+title_required_clean = true     # rejects salvage / rebuilt / parts / flood titles
+# damage_block defaults to a sensible blocklist; uncomment to override:
+# damage_block = ["AIRBAG", "FLOOD", "WATER", "FIRE", "BURN", "ROLLOVER", "FRAME", "MECHANICAL", "ENGINE", "STRIPPED", "VANDALISM"]

@@ -1,59 +1,128 @@
-# BMW Auction Watcher
+# auction-radar
 
-Daily scan of Copart (via AutoBidMaster) and IAA for BMW 3-Series and 4-Series listings matching strict buy criteria. Only prints *new* lots — state persists between runs in `seen.json`. Designed for a single, recurring shell run via cron or a launchd agent.
+Daily watcher for Copart (via AutoBidMaster) and IAA salvage auctions. Configure it for any car: make, model, year, mileage, distance, title, and damage filters. It only surfaces lots it hasn't seen before, so a daily cron run gives you just the new candidates instead of the same list every morning.
 
 ## Why
 
-Buying salvage-title performance cars is a numbers game: hundreds of irrelevant listings to one realistic candidate. Manual checking is unsustainable. This narrows two large auction houses down to the few lots that match your hard filters — make, model, mileage, distance, title status, damage type — and only surfaces things you haven't already passed on.
+Buying a salvage-title car means scanning hundreds of listings to find the one that's actually worth a bid, across two auction houses, every day. This does that scan for you. It keeps only the lots that pass your filters, and it remembers what you've already passed on, so each morning's output is just what's new.
 
-## What it filters
-
-- **Make/model:** BMW 3 and 4 Series (320 / 328 / 330 / 335 / 340 / M3 / 420 / 428 / 430 / 435 / 440 / M4).
-- **Years:** 2018 onward.
-- **Odometer:** ≤ 90,000 mi (unknown odometer allowed only when explicitly branded "Not Actual" / "Exempt", flagged for manual review).
-- **Distance:** ≤ 250 mi from a configurable origin lat/long.
-- **Title:** must be clean / clear / original — strips salvage, rebuilt, parts, junk, flood, non-repairable, certificate-of-destruction.
-- **Damage:** blocks airbag, flood, water, fire, burn, rollover, frame, mechanical, engine, stripped, vandalism. Hail and undercarriage are allowed (cheap to fix).
-- **Excludes hybrids and EVs** (330e, 430e, i3, i4, i8, iX) — drivetrain priorities don't match the buyer.
-
-## Usage
+## Quickstart
 
 ```bash
-# One-shot scan, prints new matches:
-python3 auction.py
+# Need Python 3.11+ (uses stdlib tomllib for config)
+git clone https://github.com/sa1emie/auction-radar.git
+cd auction-radar
 
-# Machine-readable JSON for downstream tools (e.g. a desktop widget):
+# Pick a starting config from examples/ and copy it as your active config:
+cp examples/bmw-3-4-series.toml auction.config.toml
+
+# Edit auction.config.toml — set your location.origin, location.max_miles, and any filter tweaks
+# Then:
+python3 auction.py
+```
+
+For JSON output (e.g. a desktop widget consuming it):
+```bash
 python3 auction.py --json
 ```
 
-`seen.json` is created next to the script on first run. Delete it to re-surface previously-seen lots.
+For a different config:
+```bash
+python3 auction.py --config ~/myconfigs/honda-civic.toml
+```
 
-### Config you'll need to change
+## Configs
 
-Open `auction.py` and set:
-- `ZIP`, `ORIGIN` — your home ZIP + lat/long
-- `MAX_MILES`, `MAX_ODO`, `YEAR_MIN` — your tolerances
-- `MODEL_NUMBERS`, `DAMAGE_BLOCK` — if you care about something other than BMW 3/4 series
+Three examples ship in `examples/`:
 
-IAA also requires an `IAAI_ACCESS_KEY` (free from auctiondata.iaai.com). Set it via env var:
+| File | Target | Notes |
+|---|---|---|
+| `bmw-3-4-series.toml` | BMW 3 / 4 Series + M3 / M4 | Excludes hybrids (xxxe) + i-series EVs |
+| `honda-civic.toml` | Honda Civic (all trims incl. Si / Type R) | Tighter 150mi radius, no exclusions |
+| `tesla-model-3.toml` | Tesla Model 3 | Allows unknown odometer; blocks ELECTRICAL / BATTERY damage (battery fires = total loss) |
+
+### Config schema
+
+```toml
+[location]
+zip = "00000"                  # informational
+origin = [0.0000, 0.0000]      # [lat, lon] — used for distance + Copart radius
+max_miles = 250                # max distance from origin
+home_label = "home"            # short tag printed in distance output
+
+[vehicle]
+make = "BMW"                   # required
+models = ["3 Series", "M3"]    # match these series names in lot title (regex \bword\b)
+model_numbers = ["320", "330"] # match these tags (regex \btag[A-Z0-9]*\b)
+model_regex = ""               # OR provide a raw regex to override the above
+exclude_patterns = [           # reject if any matches (case-insensitive)
+    "\\bHYBRID\\b",
+    "\\bELECTRIC\\b",
+]
+
+[filters]
+year_min = 2018
+year_max = 2027                # defaults to current year + 1
+max_odometer = 90000
+allow_unknown_odometer = true  # Copart NOT ACTUAL / EXEMPT brand
+title_required_clean = true    # rejects salvage / rebuilt / parts / flood
+# Override the built-in blocklists if needed:
+# title_block = [...]
+# title_clean = [...]
+# damage_block = [...]
+```
+
+## IAA setup
+
+IAA requires a free access key. Get one from [auctiondata.iaai.com](https://auctiondata.iaai.com/), then:
 
 ```bash
 export IAAI_ACCESS_KEY="your-key-here"
 ```
 
-## Output format
+(Add to your shell profile so cron picks it up.)
+
+## Cron / daily run
+
+A typical setup runs daily at, say, 7 AM. Append your local crontab:
+
+```cron
+0 7 * * * cd $HOME/auction-radar && IAAI_ACCESS_KEY=... /usr/bin/python3 auction.py
+```
+
+Or on macOS launchd, mirror the structure in `[sentinel](https://github.com/sa1emie/sentinel)`'s `scripts/install-launchd.sh`.
+
+## How it works
+
+- **Copart** via [AutoBidMaster](https://www.autobidmaster.com)'s public JSON search endpoint. Filters server-side by `make`, `max_odometer`, `origin` lat/lon, and `max_miles` (mapped to the closest distance code: 25 / 50 / 100 / 200 / 300 mi).
+- **IAA** via the Express Search HTML endpoint, parsed with `html.parser`. IAA only returns branch *names* (not coords), so the script maps a hardcoded set of known branch names → coordinates for a Haversine distance check. Unknown branches are skipped to keep the distance rule strict. Add yours to `IAAI_BRANCH_COORDS` in `auction.py`.
+- All filters live in `matches()`. One function, easy to fork for an unsupported field.
+
+## Output
 
 Human mode prints one line per new lot:
 
 ```
-[copart] 2020 BMW 330i xDrive | 38,421mi | DALLAS (28mi from ARL) | title=TX CERTIFICATE OF TITLE | dmg=FRONT END | bid=$4500 buy_now=$9800 | https://...
+[copart] 2020 BMW 330i xDrive | 38,421mi | DALLAS (28mi from home) | title=TX CERTIFICATE OF TITLE | dmg=FRONT END | bid=$4500 buy_now=$9800 | https://...
 ```
 
-JSON mode emits `{"new_count": N, "matches": [...]}` — see `--json`.
+JSON mode (`--json`) emits:
+
+```json
+{
+  "new_count": 3,
+  "matches": [
+    { "id": "...", "source": "copart", "year": 2020, "model": "...", ... }
+  ]
+}
+```
 
 ## Implementation notes
 
-- Pure stdlib (`urllib.request`, `html.parser`, `re`, `json`, `math`, `pathlib`) — zero install footprint beyond Python 3.10+.
-- AutoBidMaster has a JSON search endpoint with server-side radius filtering (cheap).
-- IAA's Express Search only returns HTML and only gives branch *names* (not coordinates), so the script maps known branch names → coords for a `haversine_mi` distance check. Unknown branches are skipped to keep the 250-mile rule strict.
-- All filters live in `matches()` — single function, easy to fork for a different make.
+- Pure Python stdlib (`urllib.request`, `html.parser`, `re`, `json`, `math`, `tomllib`, `argparse`). Zero install footprint beyond Python 3.11+.
+- State persists in `seen.json` next to the active config file. Delete it to re-surface previously-seen lots.
+- Each fetch is independently wrapped in `try/except` — one source down doesn't kill the run.
+
+## License
+
+MIT.

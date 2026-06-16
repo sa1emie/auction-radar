@@ -1,0 +1,20 @@
+# Honda Civic watcher — cheap, reliable, common; tighter mileage cap.
+
+[location]
+zip = "00000"
+origin = [0.0000, 0.0000]
+max_miles = 150
+home_label = "home"
+
+[vehicle]
+make = "Honda"
+models = ["Civic"]
+# Civic trims worth surfacing. Si and Type R are sport variants; LX/EX/Sport are mainstream.
+model_numbers = ["Si", "Type R", "Sport", "EX", "LX", "Touring"]
+exclude_patterns = []   # Civic doesn't have a hybrid/EV variant to strip
+
+[filters]
+year_min = 2016
+max_odometer = 110000
+allow_unknown_odometer = false
+title_required_clean = true
