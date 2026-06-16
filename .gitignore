@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+seen.json
+.env
+.venv/
+.claude/
